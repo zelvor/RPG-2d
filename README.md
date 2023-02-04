@@ -1,2 +1,1 @@
-# RPG-2d
- 
+Self-study project 2d RPG!

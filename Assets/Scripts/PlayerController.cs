@@ -1,57 +1,96 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
-    private float moveSpeed = 5f;
-    private Rigidbody2D _rigidbody;
+    private bool isMoving;
+    
+    public float moveSpeed;
 
-    private Animator _animator;
+    private Vector2 input;
 
-    private LayerMask solidObjectsLayer;
-    private LayerMask interactableLayer;
+    private Animator animator;
+
+    public LayerMask solidObjectsLayer;
+    public LayerMask interactableLayer;
 
     private void Awake()
     {
-        _rigidbody = GetComponent<Rigidbody2D>();
-        _animator = GetComponent<Animator>();
-        solidObjectsLayer = LayerMask.GetMask("SolidObjects");
-        interactableLayer = LayerMask.GetMask("Interactable");
+        animator = GetComponent<Animator>();
     }
 
-    private void OnMove(InputValue value)
+    public void HandleUpdate()
     {
-        _animator.SetFloat("moveX", value.Get<Vector2>().x);
-        _animator.SetFloat("moveY", value.Get<Vector2>().y);
-        _animator.SetBool("isMoving", value.Get<Vector2>() != Vector2.zero);
+        if (!isMoving)
+        {
+            input.x = Input.GetAxisRaw("Horizontal");
+            input.y = Input.GetAxisRaw("Vertical");
+
+            if (input.x != 0) 
+                input.y = 0;
+
+            if (input != Vector2.zero)
+            {
+                animator.SetFloat("moveX", input.x);
+                animator.SetFloat("moveY", input.y);
+
+                var targetPos = transform.position;
+                targetPos.x += input.x;
+                targetPos.y += input.y;
+
+                if (IsWalkable(targetPos))
+                    StartCoroutine(Move(targetPos));
+            }
+        }
+
         
-        _rigidbody.velocity = value.Get<Vector2>() * moveSpeed;
+        animator.SetBool("isMoving", isMoving);
+
+        if (Input.GetKeyDown(KeyCode.Z))
+            Interact();
+
     }
 
-    private void OnInteract()
+    void Interact()
     {
-        //Check facing direction and interact with object in front of player
-        Collider2D collider = Physics2D.OverlapCircle(transform.position, 0.6f, interactableLayer);
+        var facingDir = new Vector3(animator.GetFloat("moveX"), animator.GetFloat("moveY"));
+        var interactPos = transform.position + facingDir;
+        var collider = Physics2D.OverlapCircle(interactPos, 0.3f, interactableLayer);
         if (collider != null)
         {
             collider.GetComponent<Interactable>()?.Interact();
         }
     }
 
-    private void Update()
+
+    IEnumerator Move(Vector3 targetPos)
     {
-        Vector2 lastValue = _rigidbody.velocity;
-        if(lastValue != Vector2.zero)
+        isMoving = true;
+
+        while ((targetPos - transform.position).sqrMagnitude > Mathf.Epsilon)
         {
-            _animator.SetFloat("lastMoveX", lastValue.x);
-            _animator.SetFloat("lastMoveY", lastValue.y);
+            transform.position = Vector3.MoveTowards(transform.position, targetPos, moveSpeed * Time.deltaTime);
+
+            yield return null;
         }
-        if (Physics2D.Raycast(transform.position, _rigidbody.velocity, 0.5f, solidObjectsLayer | interactableLayer))
+
+        transform.position = targetPos;
+
+
+        isMoving = false;
+    
+    }
+
+    private bool IsWalkable(Vector3 targetPos)
+    {
+        
+        if (Physics2D.OverlapCircle(targetPos, 0.1f, solidObjectsLayer | interactableLayer) != null)
         {
-            _rigidbody.velocity = Vector2.zero;
+            return false;
         }
+          
+        return true;
     }
 
 }
